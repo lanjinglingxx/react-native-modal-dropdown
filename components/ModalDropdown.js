@@ -11,8 +11,7 @@ import {
   Modal,
   ActivityIndicator,
   FlatList,
-  Platform,
-  TextInput
+  Platform
 } from 'react-native';
 import PropTypes from 'prop-types';
 
@@ -37,18 +36,6 @@ export default class ModalDropdown extends Component {
     isFullWidth: PropTypes.bool,
     showsVerticalScrollIndicator: PropTypes.bool,
     keyboardShouldPersistTaps: PropTypes.string,
-    showSearch: PropTypes.bool,
-    keySearchObject: PropTypes.string,
-    renderSearch: PropTypes.oneOfType([
-      PropTypes.func,
-      PropTypes.object,
-    ]),
-    searchInputStyle: PropTypes.oneOfType([
-      PropTypes.number,
-      PropTypes.object,
-      PropTypes.array,
-    ]),
-    searchPlaceholder: PropTypes.string,
     style: PropTypes.oneOfType([
       PropTypes.number,
       PropTypes.object,
@@ -117,9 +104,6 @@ export default class ModalDropdown extends Component {
     isFullWidth: false,
     showsVerticalScrollIndicator: true,
     keyboardShouldPersistTaps: 'never',
-    showSearch: false,
-    searchPlaceholder: "Search",
-    keySearchObject: 'label',
     renderRowComponent: Platform.OS === 'ios' ? TouchableOpacity : TouchableHighlight,
     renderButtonComponent: TouchableOpacity,
     renderRightComponent: View,
@@ -128,7 +112,7 @@ export default class ModalDropdown extends Component {
 
   constructor(props) {
     super(props);
-    this._button = null;
+    this._button = React.createRef();
     this._buttonFrame = null;
 
     this.state = {
@@ -137,14 +121,12 @@ export default class ModalDropdown extends Component {
       showDropdown: false,
       buttonText: props.defaultValue,
       selectedIndex: props.defaultIndex,
-      options: props.options,
-      searchValue: '',
     };
   }
 
   static getDerivedStateFromProps(nextProps, state) {
-    let { selectedIndex, loading } = state;
-    const { defaultIndex, defaultValue, options } = nextProps;
+    let {selectedIndex, loading} = state;
+    const {defaultIndex, defaultValue, options} = nextProps;
     let newState = null;
 
     if (selectedIndex < 0) {
@@ -163,10 +145,6 @@ export default class ModalDropdown extends Component {
       }
       newState.loading = !options;
     }
-    // this compare only checks an array with no data, doesnt deep check, this comparison use for get api
-    if (options !== state.options) {
-      newState.options = options
-    }
     return newState;
   }
 
@@ -180,8 +158,8 @@ export default class ModalDropdown extends Component {
   }
 
   _updatePosition(callback) {
-    if (this._button && this._button.measure) {
-      this._button.measure((fx, fy, width, height, px, py) => {
+    if (this._button.current && this._button.current.measure) {
+      this._button.current.measure((fx, fy, width, height, px, py) => {
         this._buttonFrame = {
           x: px,
           y: py,
@@ -241,8 +219,7 @@ export default class ModalDropdown extends Component {
       renderButtonComponent,
       renderButtonProps,
       renderRightComponent,
-      buttonAndRightComponentContainerStyle,
-      numberOfLines,
+      numberOfLines
     } = this.props;
     const ButtonTouchable = renderButtonComponent;
     const RightComponent = renderRightComponent;
@@ -250,14 +227,14 @@ export default class ModalDropdown extends Component {
     const buttonTextStyle = selectedIndex < 0 ? [textStyle, defaultTextStyle] : textStyle;
     return (
       <ButtonTouchable
-        ref={button => (this._button = button)}
+        ref={this._button}
         disabled={disabled}
         accessible={accessible}
         onPress={this._onButtonPress}
         {...renderButtonProps}
       >
         {children || (
-          <View style={[styles.button, buttonAndRightComponentContainerStyle]}>
+          <View style={styles.button}>
             <Text style={[styles.buttonText, buttonTextStyle]} numberOfLines={numberOfLines}>
               {buttonText}
             </Text>
@@ -337,7 +314,7 @@ export default class ModalDropdown extends Component {
 
     if (showInLeft) {
       positionStyle.left = this._buttonFrame.x;
-      if (isFullWidth) {
+      if(isFullWidth) {
         positionStyle.right = rightSpace - this._buttonFrame.w;
       }
     } else {
@@ -373,48 +350,6 @@ export default class ModalDropdown extends Component {
     return <ActivityIndicator size="small" />;
   };
 
-  _renderSearchInput = () => {
-    const {
-      showSearch,
-      renderSearch,
-      searchInputStyle,
-      searchPlaceholder,
-      options: initialOptions,
-      keySearchObject,
-    } = this.props;
-
-    if (!showSearch) return null;
-    if (renderSearch) return renderSearch;
-
-    const { buttonText, searchValue } = this.state;
-
-    return (
-      <TextInput
-        style={[styles.searchInput, searchInputStyle]}
-        onChangeText={(text) => {
-          let filteredOptions = initialOptions;
-
-          if (text) {
-            filteredOptions = initialOptions.filter((option) => {
-              return typeof option === 'object' && option !== null
-                ? option?.[keySearchObject]?.toLowerCase().includes(text.toLowerCase().trim())
-                : option.toLowerCase().includes(text.toLowerCase().trim())
-            }
-            );
-          }
-
-          this.setState({
-            searchValue: text,
-            options: filteredOptions,
-            selectedIndex: filteredOptions.indexOf(buttonText)
-          })
-        }}
-        value={searchValue}
-        placeholder={searchPlaceholder}
-      />
-    );
-  };
-
   _renderDropdown() {
     const {
       scrollEnabled,
@@ -422,17 +357,15 @@ export default class ModalDropdown extends Component {
       renderSeparator,
       showsVerticalScrollIndicator,
       keyboardShouldPersistTaps,
+      options,
       dropdownListProps,
     } = this.props;
     const { selectedIndex } = this.state;
-    const { options } = this.state;
 
     return (
       <FlatList
         {...dropdownListProps}
-        getItemLayout={(data, index) => { return {length: 33 + StyleSheet.hairlineWidth, index, offset: (33 + StyleSheet.hairlineWidth) * index} }}
         data={options}
-        ref={component => (this.flatList = component)}
         scrollEnabled={scrollEnabled}
         initialScrollIndex={saveScrollPosition ? selectedIndex : -1}
         style={styles.list}
@@ -442,13 +375,6 @@ export default class ModalDropdown extends Component {
         automaticallyAdjustContentInsets={false}
         showsVerticalScrollIndicator={showsVerticalScrollIndicator}
         keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-        ListHeaderComponent={this._renderSearchInput}
-        onScrollToIndexFailed={info => {
-          const wait = new Promise(resolve => setTimeout(resolve, 500));
-          wait.then(() => {
-            this.flatList.scrollToIndex({ index: info.index, animated: true });
-          });
-        }}
       />
     );
   }
@@ -469,7 +395,7 @@ export default class ModalDropdown extends Component {
     const key = `row_${index}`;
     const highlighted = index === selectedIndex;
     const value =
-      (renderRowText && renderRowText(item)) || item.toString();
+        (renderRowText && renderRowText(item)) || item.toString();
     const row = !renderRow ? (
       <Text
         style={[
@@ -508,6 +434,7 @@ export default class ModalDropdown extends Component {
     if (!onSelect || onSelect(rowID, rowData) !== false) {
       const value =
         (renderButtonText && renderButtonText(rowData)) || rowData.toString();
+
       this.setState({
         buttonText: value,
         selectedIndex: rowID,
@@ -515,8 +442,8 @@ export default class ModalDropdown extends Component {
     }
 
     if (!multipleSelect &&
-      (!onDropdownWillHide || onDropdownWillHide() !== false)
-    ) {
+        (!onDropdownWillHide || onDropdownWillHide() !== false)
+       ) {
       this.setState({
         showDropdown: false,
       });
@@ -533,7 +460,7 @@ export default class ModalDropdown extends Component {
 const styles = StyleSheet.create({
   button: {
     // justifyContent: 'center',
-    flexDirection: 'row',
+    flexDirection:'row',
     alignItems: 'center'
   },
   buttonText: {
@@ -572,11 +499,4 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: 'lightgray',
   },
-  searchInput: {
-    borderColor: 'gray',
-    borderWidth: StyleSheet.hairlineWidth,
-    fontSize: 11,
-    paddingHorizontal: 6,
-    paddingVertical: 10,
-  }
 });
